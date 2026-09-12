@@ -87,6 +87,9 @@ const TRANSCRIPT_DETAIL_TURNS: u64 = 1;
 const MAX_AUTO_DETAIL_ROLLOUT_BYTES: u64 = 128 * 1024 * 1024;
 const TASK_ROLLOVER_WARN_BYTES: u64 = 1024 * 1024 * 1024;
 const BACKEND_EVENT_BATCH: usize = 96;
+const TRANSCRIPT_RENDER_DEBOUNCE: Duration = Duration::from_millis(100);
+const TRANSCRIPT_SCROLL_ANIMATION: Duration = Duration::from_millis(180);
+const TRANSCRIPT_SCROLL_FRAME: Duration = Duration::from_millis(16);
 const REMOTE_RECOVERY_SAMPLES: u8 = 2;
 const REMOTE_RECOVERY_COOLDOWN: Duration = Duration::from_secs(5 * 60);
 const MCP_RELOAD_METHOD: &str = "config/mcpServer/reload";
@@ -406,6 +409,7 @@ impl MainWindow {
             transcript_rows: RefCell::new(Vec::new()),
             transcript_follow_bottom: Cell::new(true),
             transcript_scroll_restoring: Cell::new(false),
+            transcript_scroll_animation_generation: Cell::new(0),
             last_transcript_revision: Cell::new(None),
             last_transcript_thread: RefCell::new(None),
             last_transcript_reasoning: Cell::new(false),
@@ -2466,6 +2470,7 @@ struct Controller {
     transcript_rows: RefCell<Vec<RenderedTranscriptRow>>,
     transcript_follow_bottom: Cell<bool>,
     transcript_scroll_restoring: Cell<bool>,
+    transcript_scroll_animation_generation: Cell<u64>,
     last_transcript_revision: Cell<Option<u64>>,
     last_transcript_thread: RefCell<Option<String>>,
     last_transcript_reasoning: Cell<bool>,
@@ -2533,6 +2538,12 @@ struct RenderedTranscriptRow {
     key: String,
     fingerprint: u64,
     widget: gtk::Widget,
+    streaming_body: Option<gtk::Label>,
+}
+
+struct BuiltTranscriptRow {
+    widget: gtk::Widget,
+    streaming_body: Option<gtk::Label>,
 }
 
 struct TranscriptRowSpec {
@@ -2601,6 +2612,7 @@ impl Controller {
         adjustment.connect_value_changed(move |adjustment| {
             with_controller(&weak, |controller| {
                 if !controller.transcript_scroll_restoring.get() {
+                    controller.cancel_transcript_scroll_animation();
                     controller
                         .transcript_follow_bottom
                         .set(adjustment_is_near_bottom(adjustment));
@@ -2611,7 +2623,7 @@ impl Controller {
         adjustment.connect_upper_notify(move |adjustment| {
             with_controller(&weak, |controller| {
                 if controller.transcript_follow_bottom.get() {
-                    controller.set_transcript_scroll_value(
+                    controller.animate_transcript_scroll_to(
                         adjustment,
                         (adjustment.upper() - adjustment.page_size()).max(0.0),
                     );
@@ -3226,7 +3238,7 @@ impl Controller {
             return;
         }
         let weak = self.weak_self.borrow().clone();
-        glib::timeout_add_local_once(Duration::from_millis(200), move || {
+        glib::timeout_add_local_once(TRANSCRIPT_RENDER_DEBOUNCE, move || {
             with_controller(&weak, |controller| {
                 controller.transcript_render_scheduled.set(false);
                 if controller.state.borrow().page == WorkspacePage::Chat {
@@ -6268,6 +6280,12 @@ fn transcript_scroll_target(
     target.clamp(0.0, maximum)
 }
 
+fn eased_transcript_scroll_progress(elapsed: Duration) -> f64 {
+    let progress =
+        (elapsed.as_secs_f64() / TRANSCRIPT_SCROLL_ANIMATION.as_secs_f64()).clamp(0.0, 1.0);
+    1.0 - (1.0 - progress).powi(3)
+}
+
 fn adjustment_is_near_bottom(adjustment: &gtk::Adjustment) -> bool {
     let maximum = (adjustment.upper() - adjustment.page_size()).max(0.0);
     maximum - adjustment.value() < 96.0
@@ -6431,6 +6449,19 @@ fn transcript_item_fingerprint(
         ),
         _ => fingerprint_values([kind, cwd, &item.to_string()], &[]),
     }
+}
+
+fn streamed_agent_message_text(content: &TranscriptRowContent) -> Option<&str> {
+    let TranscriptRowContent::Item {
+        item,
+        streamed_text,
+        ..
+    } = content
+    else {
+        return None;
+    };
+    (item.get("type").and_then(Value::as_str) == Some("agentMessage") && !streamed_text.is_empty())
+        .then_some(streamed_text.as_str())
 }
 
 fn fingerprint_values<const N: usize>(parts: [&str; N], values: &[String]) -> u64 {
@@ -11739,7 +11770,14 @@ impl Controller {
             self.widgets.transcript.append(&welcome);
             self.set_thread_action_sensitivity(false);
             drop(state);
-            self.restore_transcript_scroll(adjustment, true, false, previous_value, previous_upper);
+            self.restore_transcript_scroll(
+                adjustment,
+                true,
+                false,
+                false,
+                previous_value,
+                previous_upper,
+            );
             return;
         };
         self.widgets
@@ -11796,6 +11834,7 @@ impl Controller {
             adjustment,
             thread_changed || was_at_bottom,
             prepended,
+            !thread_changed && was_at_bottom && !prepended,
             previous_value,
             previous_upper,
         );
@@ -11831,7 +11870,7 @@ impl Controller {
         for spec in specs {
             let existing_index = existing.iter().position(|row| row.key == spec.key);
             let old = existing_index.map(|index| existing.remove(index));
-            let widget = if let Some(old) = old {
+            let built = if let Some(mut old) = old {
                 if old.fingerprint == spec.fingerprint {
                     let expected_previous = old.widget.prev_sibling();
                     if expected_previous.as_ref() != previous.as_ref() {
@@ -11839,28 +11878,42 @@ impl Controller {
                             .transcript
                             .reorder_child_after(&old.widget, previous.as_ref());
                     }
-                    Some(old.widget)
+                    Some(BuiltTranscriptRow {
+                        widget: old.widget,
+                        streaming_body: old.streaming_body,
+                    })
+                } else if let (Some(body), Some(text)) = (
+                    old.streaming_body.as_ref(),
+                    streamed_agent_message_text(&spec.content),
+                ) {
+                    body.set_label(text);
+                    old.fingerprint = spec.fingerprint;
+                    Some(BuiltTranscriptRow {
+                        widget: old.widget,
+                        streaming_body: old.streaming_body,
+                    })
                 } else {
                     self.widgets.transcript.remove(&old.widget);
-                    self.build_transcript_row(&spec.content).inspect(|widget| {
+                    self.build_transcript_row(&spec.content).inspect(|built| {
                         self.widgets
                             .transcript
-                            .insert_child_after(widget, previous.as_ref());
+                            .insert_child_after(&built.widget, previous.as_ref());
                     })
                 }
             } else {
-                self.build_transcript_row(&spec.content).inspect(|widget| {
+                self.build_transcript_row(&spec.content).inspect(|built| {
                     self.widgets
                         .transcript
-                        .insert_child_after(widget, previous.as_ref());
+                        .insert_child_after(&built.widget, previous.as_ref());
                 })
             };
-            let Some(widget) = widget else { continue };
-            previous = Some(widget.clone());
+            let Some(built) = built else { continue };
+            previous = Some(built.widget.clone());
             rendered.push(RenderedTranscriptRow {
                 key: spec.key,
                 fingerprint: spec.fingerprint,
-                widget,
+                widget: built.widget,
+                streaming_body: built.streaming_body,
             });
         }
         for stale in existing {
@@ -11869,9 +11922,10 @@ impl Controller {
         *self.transcript_rows.borrow_mut() = rendered;
     }
 
-    fn build_transcript_row(&self, content: &TranscriptRowContent) -> Option<gtk::Widget> {
+    fn build_transcript_row(&self, content: &TranscriptRowContent) -> Option<BuiltTranscriptRow> {
         let row = gtk::Box::new(gtk::Orientation::Vertical, 6);
         row.add_css_class("transcript-row");
+        let mut streaming_body = None;
         match content {
             TranscriptRowContent::Route(route) => {
                 let receipt = gtk::Label::new(Some(&route.display_label()));
@@ -11902,6 +11956,20 @@ impl Controller {
                 streamed_text,
                 show_reasoning,
                 cwd,
+            } if streamed_agent_message_text(content).is_some() => {
+                let author = item
+                    .get("author")
+                    .and_then(Value::as_str)
+                    .unwrap_or("Codex");
+                let (card, body) = streaming_message_card(author, streamed_text);
+                row.append(&card);
+                streaming_body = Some(body);
+            }
+            TranscriptRowContent::Item {
+                item,
+                streamed_text,
+                show_reasoning,
+                cwd,
             } => self.append_item_to(&row, item, streamed_text, *show_reasoning, cwd),
             TranscriptRowContent::Images { images, verb } => {
                 self.append_image_activity_to(&row, images, verb)
@@ -11913,7 +11981,10 @@ impl Controller {
             )),
         }
         row.first_child()?;
-        Some(row.upcast())
+        Some(BuiltTranscriptRow {
+            widget: row.upcast(),
+            streaming_body,
+        })
     }
 
     fn set_transcript_scroll_value(&self, adjustment: &gtk::Adjustment, value: f64) {
@@ -11922,11 +11993,51 @@ impl Controller {
         self.transcript_scroll_restoring.set(false);
     }
 
+    fn cancel_transcript_scroll_animation(&self) {
+        self.transcript_scroll_animation_generation.set(
+            self.transcript_scroll_animation_generation
+                .get()
+                .wrapping_add(1),
+        );
+    }
+
+    fn animate_transcript_scroll_to(&self, adjustment: &gtk::Adjustment, target: f64) {
+        let maximum = (adjustment.upper() - adjustment.page_size()).max(0.0);
+        let target = target.clamp(0.0, maximum);
+        let start = adjustment.value();
+        self.cancel_transcript_scroll_animation();
+        if (target - start).abs() < 0.5 {
+            self.set_transcript_scroll_value(adjustment, target);
+            return;
+        }
+        let generation = self.transcript_scroll_animation_generation.get();
+        let adjustment = adjustment.clone();
+        let started = Instant::now();
+        let weak = self.weak_self.borrow().clone();
+        glib::timeout_add_local(TRANSCRIPT_SCROLL_FRAME, move || {
+            let Some(controller) = weak.upgrade() else {
+                return glib::ControlFlow::Break;
+            };
+            if controller.transcript_scroll_animation_generation.get() != generation {
+                return glib::ControlFlow::Break;
+            }
+            let progress = eased_transcript_scroll_progress(started.elapsed());
+            controller
+                .set_transcript_scroll_value(&adjustment, start + (target - start) * progress);
+            if progress >= 1.0 {
+                glib::ControlFlow::Break
+            } else {
+                glib::ControlFlow::Continue
+            }
+        });
+    }
+
     fn restore_transcript_scroll(
         &self,
         adjustment: gtk::Adjustment,
         follow_bottom: bool,
         prepended: bool,
+        animate_follow_bottom: bool,
         previous_value: f64,
         previous_upper: f64,
     ) {
@@ -11947,7 +12058,12 @@ impl Controller {
                 if follow_bottom {
                     controller.transcript_follow_bottom.set(true);
                 }
-                controller.set_transcript_scroll_value(&adjustment, target);
+                if animate_follow_bottom {
+                    controller.animate_transcript_scroll_to(&adjustment, target);
+                } else {
+                    controller.cancel_transcript_scroll_animation();
+                    controller.set_transcript_scroll_value(&adjustment, target);
+                }
             });
         });
     }
@@ -15823,6 +15939,36 @@ fn thread_context_mouse_button() -> u32 {
 }
 
 fn message_card(role: &str, content: &str, class: &str) -> gtk::Box {
+    let (card, role_label) = message_card_shell(role, class);
+    // GtkTextView exposes rendered Markdown visually, but some GTK/AT-SPI
+    // combinations do not publish its buffer text. Attach a bounded message
+    // summary to the always-visible role label so screen readers and release
+    // smoke tests can still discover the content without retaining an
+    // unbounded duplicate in accessibility state.
+    let accessible_message = format!("{role}: {}", compact_ui_text(content, 4_096));
+    role_label.update_property(&[gtk::accessible::Property::Label(&accessible_message)]);
+    let body = markdown::render_rich(content);
+    card.append(&body);
+    card
+}
+
+fn streaming_message_card(role: &str, content: &str) -> (gtk::Box, gtk::Label) {
+    let (card, role_label) = message_card_shell(role, "message-assistant");
+    role_label.update_property(&[gtk::accessible::Property::Label(&format!(
+        "{role}: {}",
+        compact_ui_text(content, 4_096)
+    ))]);
+    let body = gtk::Label::new(Some(content));
+    body.set_xalign(0.0);
+    body.set_wrap(true);
+    body.set_wrap_mode(gtk::pango::WrapMode::WordChar);
+    body.set_selectable(true);
+    body.add_css_class("streaming-message-body");
+    card.append(&body);
+    (card, body)
+}
+
+fn message_card_shell(role: &str, class: &str) -> (gtk::Box, gtk::Label) {
     let card = gtk::Box::new(gtk::Orientation::Vertical, 8);
     card.set_hexpand(true);
     card.add_css_class("message-card");
@@ -15842,18 +15988,9 @@ fn message_card(role: &str, content: &str, class: &str) -> gtk::Box {
     let role_label = gtk::Label::new(Some(role));
     role_label.set_xalign(0.0);
     role_label.add_css_class("message-role");
-    // GtkTextView exposes rendered Markdown visually, but some GTK/AT-SPI
-    // combinations do not publish its buffer text. Attach a bounded message
-    // summary to the always-visible role label so screen readers and release
-    // smoke tests can still discover the content without retaining an
-    // unbounded duplicate in accessibility state.
-    let accessible_message = format!("{role}: {}", compact_ui_text(content, 4_096));
-    role_label.update_property(&[gtk::accessible::Property::Label(&accessible_message)]);
     role_row.append(&role_label);
     card.append(&role_row);
-    let body = markdown::render_rich(content);
-    card.append(&body);
-    card
+    (card, role_label)
 }
 
 #[derive(Debug, Default, PartialEq, Eq)]
@@ -17655,6 +17792,43 @@ mod tests {
             transcript_scroll_target(true, false, 420.0, 2_000.0, 2_400.0, 600.0),
             1_800.0
         );
+    }
+
+    #[test]
+    fn transcript_scroll_easing_starts_smoothly_and_finishes_exactly() {
+        assert_eq!(eased_transcript_scroll_progress(Duration::ZERO), 0.0);
+        let midpoint = eased_transcript_scroll_progress(TRANSCRIPT_SCROLL_ANIMATION / 2);
+        assert!(midpoint > 0.5 && midpoint < 1.0);
+        assert_eq!(
+            eased_transcript_scroll_progress(TRANSCRIPT_SCROLL_ANIMATION),
+            1.0
+        );
+        assert_eq!(
+            eased_transcript_scroll_progress(TRANSCRIPT_SCROLL_ANIMATION * 2),
+            1.0
+        );
+    }
+
+    #[test]
+    fn lightweight_streaming_rows_only_apply_to_live_agent_messages() {
+        let live = TranscriptRowContent::Item {
+            item: json!({"type": "agentMessage"}),
+            streamed_text: "Writing a summary".into(),
+            show_reasoning: false,
+            cwd: String::new(),
+        };
+        assert_eq!(
+            streamed_agent_message_text(&live),
+            Some("Writing a summary")
+        );
+
+        let complete = TranscriptRowContent::Item {
+            item: json!({"type": "agentMessage", "text": "Complete summary"}),
+            streamed_text: String::new(),
+            show_reasoning: false,
+            cwd: String::new(),
+        };
+        assert_eq!(streamed_agent_message_text(&complete), None);
     }
 
     #[test]
