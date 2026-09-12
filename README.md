@@ -1,5 +1,7 @@
 # Codex Native
 
+![Codex Native interface](docs/images/codex-native-ui.png)
+
 Codex Native is a native GTK4 desktop client for the Codex CLI on Arch Linux.
 It provides a fast, Linux-first workspace for coding tasks without requiring
 the official Codex Desktop app.
