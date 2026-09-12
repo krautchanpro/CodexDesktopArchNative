@@ -1,0 +1,74 @@
+# Maintainer: Codex Native contributors
+pkgname=codex-native
+pkgver=0.7.1
+pkgrel=2
+pkgdesc='Native GTK4 Codex desktop client with experimental iOS remote access'
+arch=('x86_64' 'aarch64')
+url='https://github.com/krautchanpro/CodexDesktopArchNative'
+license=('MIT')
+depends=('gtk4>=4.18' 'libadwaita>=1.7' 'gtksourceview5' 'vte4' 'webkitgtk-6.0>=2.50' 'cargo' 'sqlite')
+makedepends=('cargo' 'rust')
+optdepends=(
+  'nodejs: install the required OpenAI Codex CLI with npm'
+  'npm: install the required OpenAI Codex CLI with npm'
+  'xdg-desktop-portal: Computer Use screenshot and input permissions'
+  'at-spi2-core: Computer Use accessibility trees and element actions'
+  'ydotool: Wayland input fallback for Computer Use'
+  'bubblewrap: isolated Agent Workspace shells and bounded Macro Execution'
+  'wezterm: preferred external terminal for Agent Workspace shells'
+  'pipewire-audio: native voice dictation capture'
+  'speech-dispatcher: native Read Aloud support'
+  'pacman-contrib: accurate package update checks'
+  'polkit: authenticated graphical package updates and rollbacks'
+  'llama.cpp: supervised Qwen Buddy MTP runtime (CUDA or Vulkan build recommended)'
+  'nvidia-utils: Qwen Buddy GPU pressure and workload telemetry on NVIDIA systems'
+  'spectacle: focused-window AppShots on KDE Plasma'
+  'gnome-screenshot: focused-window AppShots on GNOME'
+)
+options=('!lto')
+source=()
+sha256sums=()
+
+build() {
+  cd "$startdir/.."
+  cargo build --release --locked
+}
+
+check() {
+  cd "$startdir/.."
+  cargo test --all-targets --locked
+}
+
+package() {
+  cd "$startdir/.."
+  install -Dm755 target/release/codex-native "$pkgdir/usr/bin/codex-native"
+  install -Dm755 target/release/codex-native-macro \
+    "$pkgdir/usr/lib/codex-native/codex-native-macro"
+  install -Dm755 tools/codex-native-launch \
+    "$pkgdir/usr/bin/codex-native-launch"
+  install -Dm644 data/io.codexnative.Arch.desktop \
+    "$pkgdir/usr/share/applications/io.codexnative.Arch.desktop"
+  install -Dm644 data/io.codexnative.Arch.metainfo.xml \
+    "$pkgdir/usr/share/metainfo/io.codexnative.Arch.metainfo.xml"
+  install -Dm644 data/io.codexnative.Arch.svg \
+    "$pkgdir/usr/share/icons/hicolor/scalable/apps/io.codexnative.Arch.svg"
+  install -Dm644 data/icons/chatgpt-symbol.ico \
+    "$pkgdir/usr/share/icons/hicolor/48x48/apps/chatgpt-symbol.ico"
+  install -Dm644 data/icons/arch-linux-symbol.svg \
+    "$pkgdir/usr/share/icons/hicolor/scalable/apps/arch-linux-symbol.svg"
+  install -Dm644 data/codex-native-remote.service \
+    "$pkgdir/usr/lib/systemd/user/codex-native-remote.service"
+  install -Dm644 data/codex-native-remote@.service \
+    "$pkgdir/usr/lib/systemd/user/codex-native-remote@.service"
+  install -Dm755 tools/codex-native-remote-host \
+    "$pkgdir/usr/lib/codex-native/codex-native-remote-host"
+  install -Dm755 tools/codex-native-remote-watchdog \
+    "$pkgdir/usr/lib/codex-native/codex-native-remote-watchdog"
+  install -Dm644 data/codex-native-remote-watchdog.service \
+    "$pkgdir/usr/lib/systemd/user/codex-native-remote-watchdog.service"
+  install -Dm644 data/codex-native-remote-watchdog.timer \
+    "$pkgdir/usr/lib/systemd/user/codex-native-remote-watchdog.timer"
+  install -Dm644 data/codex-native-app.service \
+    "$pkgdir/usr/lib/systemd/user/codex-native-app.service"
+  install -Dm644 LICENSE "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+}

@@ -1,0 +1,11 @@
+[Unit]
+Description=Periodically verify the Codex Native remote host
+
+[Timer]
+OnStartupSec=45s
+OnUnitActiveSec=20s
+AccuracySec=2s
+Unit=codex-native-remote-watchdog.service
+
+[Install]
+WantedBy=timers.target

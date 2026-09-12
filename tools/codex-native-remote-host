@@ -1,0 +1,188 @@
+#!/usr/bin/python3
+"""Launch Codex Native's recoverable stock Remote Control host."""
+
+from __future__ import annotations
+
+import argparse
+import json
+import os
+from pathlib import Path
+import re
+import subprocess
+import sys
+
+
+def managed_codex() -> Path:
+    override = os.environ.get("CODEX_NATIVE_MANAGED_CODEX")
+    if override:
+        return Path(override)
+    return Path("/usr/bin/codex")
+
+
+def profile_codex_home(profile: str) -> Path | None:
+    if profile == "primary":
+        return None
+    if not re.fullmatch(r"account-[0-9a-f]{32}", profile):
+        raise RuntimeError("invalid Codex Native account profile")
+    data_home = Path(os.environ.get("XDG_DATA_HOME", Path.home() / ".local/share"))
+    return data_home / "codex-native" / "accounts" / profile / "codex"
+
+
+def daemon_pid_path(profile: str) -> Path:
+    override = os.environ.get("CODEX_NATIVE_DAEMON_PID_FILE")
+    if override:
+        return Path(override)
+    codex_home = profile_codex_home(profile) or Path(
+        os.environ.get("CODEX_HOME", Path.home() / ".codex")
+    )
+    return codex_home / "app-server-daemon" / "app-server.pid"
+
+
+def process_start_time(pid: int) -> str:
+    result = subprocess.run(
+        ["ps", "-o", "lstart=", "-p", str(pid)],
+        check=True,
+        capture_output=True,
+        text=True,
+        timeout=5,
+        env={**os.environ, "LC_ALL": "C"},
+    )
+    started = result.stdout.strip()
+    if not started:
+        raise RuntimeError(f"could not read process start time for {pid}")
+    return started
+
+
+def publish_daemon_pid(profile: str) -> None:
+    path = daemon_pid_path(profile)
+    path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+    temporary = path.with_suffix(".pid.codex-native.tmp")
+    payload = {
+        "pid": os.getpid(),
+        "processStartTime": process_start_time(os.getpid()),
+    }
+    descriptor = os.open(temporary, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    with os.fdopen(descriptor, "w", encoding="utf-8") as handle:
+        json.dump(payload, handle, separators=(",", ":"))
+        handle.flush()
+        os.fsync(handle.fileno())
+    os.replace(temporary, path)
+
+
+def cleanup_daemon_pid(profile: str, expected_pid: int | None) -> int:
+    path = daemon_pid_path(profile)
+    try:
+        value = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, json.JSONDecodeError):
+        return 0
+    if expected_pid is not None and value.get("pid") != expected_pid:
+        return 0
+    try:
+        path.unlink()
+    except FileNotFoundError:
+        pass
+    return 0
+
+
+def binary_version(binary: Path) -> str | None:
+    if not binary.is_file() or not os.access(binary, os.X_OK):
+        return None
+    try:
+        result = subprocess.run(
+            [str(binary), "--version"],
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+    if result.returncode != 0:
+        return None
+    return result.stdout.strip()
+
+
+def select_host() -> tuple[Path, bool, str]:
+    managed = managed_codex()
+    managed_version = binary_version(managed)
+    if managed_version is None:
+        raise RuntimeError(
+            f"package-managed Codex CLI is unavailable at {managed}; install openai-codex with the system package manager"
+        )
+    return managed, False, f"using package-managed {managed_version}"
+
+
+def prepare(profile: str) -> int:
+    managed = managed_codex()
+    if not managed.is_file() or not os.access(managed, os.X_OK):
+        return 0
+    try:
+        environment = os.environ.copy()
+        codex_home = profile_codex_home(profile)
+        if codex_home is not None:
+            codex_home.mkdir(mode=0o700, parents=True, exist_ok=True)
+            os.chmod(codex_home, 0o700)
+            environment["CODEX_HOME"] = str(codex_home)
+        subprocess.run(
+            [str(managed), "remote-control", "stop", "--json"],
+            check=False,
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            timeout=20,
+            env=environment,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        # The foreground systemd service still performs its own socket safety checks.
+        pass
+    return 0
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("action", choices=("prepare", "run", "select", "cleanup"))
+    parser.add_argument("pid", nargs="?", type=int)
+    parser.add_argument("--profile", default=os.environ.get("CODEX_NATIVE_ACCOUNT_PROFILE", "primary"))
+    args = parser.parse_args()
+
+    if args.action == "prepare":
+        return prepare(args.profile)
+    if args.action == "cleanup":
+        return cleanup_daemon_pid(args.profile, args.pid)
+
+    try:
+        binary, routed, reason = select_host()
+    except RuntimeError as error:
+        print(error, file=sys.stderr)
+        return 1
+    if args.action == "select":
+        print(json.dumps({"binary": str(binary), "routed": routed, "reason": reason}))
+        return 0
+
+    codex_home = profile_codex_home(args.profile)
+    if codex_home is not None:
+        codex_home.mkdir(mode=0o700, parents=True, exist_ok=True)
+        os.chmod(codex_home, 0o700)
+        os.environ["CODEX_HOME"] = str(codex_home)
+    print(f"Codex Native Remote: {reason}; launching {binary}", file=sys.stderr)
+    publish_daemon_pid(args.profile)
+    try:
+        arguments = [
+            str(binary),
+            "app-server",
+            "--remote-control",
+            "--listen",
+            "unix://",
+        ]
+        os.execv(
+            str(binary),
+            arguments,
+        )
+    except OSError:
+        cleanup_daemon_pid(args.profile, os.getpid())
+        raise
+    return 1
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

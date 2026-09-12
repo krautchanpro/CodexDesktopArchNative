@@ -1,0 +1,29 @@
+#!/bin/sh
+
+set -eu
+
+unit="codex-native-app.service"
+app_id="io.codexnative.Arch"
+binary="/usr/bin/codex-native"
+
+# Keep command-line modes deterministic and synchronous for automations,
+# diagnostics, and package verification.
+if [ "$#" -gt 0 ]; then
+    exec "$binary" "$@"
+fi
+
+# Start the GUI in its own user-systemd unit. This prevents a caller such as
+# another Codex desktop client, terminal, or installer from owning Native's
+# lifetime through its process scope.
+if command -v systemctl >/dev/null 2>&1 \
+    && systemctl --user show-environment >/dev/null 2>&1 \
+    && systemctl --user start "$unit"; then
+    if command -v gapplication >/dev/null 2>&1; then
+        gapplication launch "$app_id" >/dev/null 2>&1 || true
+        exit 0
+    fi
+fi
+
+# Direct execution remains available on sessions without a user systemd or
+# gapplication helper. GtkApplication forwards activation to an existing GUI.
+exec "$binary"

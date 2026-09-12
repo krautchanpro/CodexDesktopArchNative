@@ -1,0 +1,26 @@
+[Unit]
+Description=Codex experimental remote-control host
+Documentation=https://learn.chatgpt.com/docs/remote-connections
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=simple
+Environment=PATH=/usr/local/bin:/usr/bin:%h/.local/bin:%h/.codex/bin:%h/.npm-global/bin
+Environment=CODEX_NATIVE_MANAGED_CODEX=/usr/bin/codex
+Environment=MALLOC_ARENA_MAX=4
+Environment=MALLOC_TRIM_THRESHOLD_=131072
+ExecStartPre=-/usr/lib/codex-native/codex-native-remote-host prepare
+ExecStart=/usr/lib/codex-native/codex-native-remote-host run
+ExecStopPost=-/usr/lib/codex-native/codex-native-remote-host cleanup
+Restart=always
+RestartSec=2
+KillMode=control-group
+TimeoutStartSec=45
+TimeoutStopSec=15
+MemoryHigh=4G
+MemoryMax=8G
+MemorySwapMax=4G
+
+[Install]
+WantedBy=default.target

@@ -1,0 +1,65 @@
+[package]
+name = "codex-native"
+version = "0.7.1"
+edition = "2024"
+rust-version = "1.92"
+description = "A native GTK4 Codex desktop client for Arch Linux"
+license = "MIT"
+repository = "https://github.com/krautchanpro/CodexDesktopArchNative"
+
+[dependencies]
+gtk = { package = "gtk4", version = "0.10", features = ["v4_18"] }
+adw = { package = "libadwaita", version = "0.8", features = ["v1_7", "gtk_v4_18"] }
+glib = "0.21"
+gio = "0.21"
+ksni = { version = "0.3.6", features = ["blocking"] }
+
+tokio = { version = "1", features = [
+    "rt-multi-thread",
+    "process",
+    "io-util",
+    "io-std",
+    "net",
+    "sync",
+    "macros",
+    "time",
+] }
+
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+rusqlite = { version = "0.40", features = ["backup"] }
+anyhow = "1"
+thiserror = "2"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+pulldown-cmark = { version = "0.13", default-features = false }
+base64 = "0.22"
+dirs = "6"
+uuid = { version = "1", features = ["v4", "serde"] }
+chrono = { version = "0.4", default-features = false, features = ["clock", "serde"] }
+libc = "0.2"
+memchr = "2"
+sha2 = "0.10"
+tempfile = "3"
+
+sourceview = { package = "sourceview5", version = "0.10", features = ["v5_18"] }
+vte = { package = "vte4", version = "0.9", features = ["v0_78"] }
+webkit = { package = "webkit6", version = "0.5.0", features = ["v2_50", "gtk_v4_18"] }
+
+[profile.release]
+lto = "thin"
+codegen-units = 1
+strip = "symbols"
+
+[package.metadata.arch]
+runtime-dependencies = [
+    "gtk4",
+    "libadwaita",
+    "gtksourceview5",
+    "vte4",
+    "webkitgtk-6.0",
+    "git",
+    "openssh",
+    "sqlite",
+    "codex-cli",
+]

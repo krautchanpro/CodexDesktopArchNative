@@ -1,0 +1,38 @@
+pkgbase = codex-native
+	pkgdesc = Native GTK4 Codex desktop client with experimental iOS remote access
+	pkgver = 0.7.1
+	pkgrel = 2
+	url = https://github.com/krautchanpro/CodexDesktopArchNative
+	arch = x86_64
+	arch = aarch64
+	license = MIT
+	makedepends = cargo
+	makedepends = rust
+	depends = gtk4>=4.18
+	depends = libadwaita>=1.7
+	depends = gtksourceview5
+	depends = vte4
+	depends = webkitgtk-6.0>=2.50
+	depends = python
+	depends = cargo
+	depends = sqlite
+	optdepends = nodejs: install the required OpenAI Codex CLI with npm
+	optdepends = npm: install the required OpenAI Codex CLI with npm
+	optdepends = xdg-desktop-portal: Computer Use screenshot and input permissions
+	optdepends = at-spi2-core: Computer Use accessibility trees and element actions
+	optdepends = ydotool: Wayland input fallback for Computer Use
+	optdepends = bubblewrap: isolated Agent Workspace shells and bounded Macro Execution
+	optdepends = wezterm: preferred external terminal for Agent Workspace shells
+	optdepends = pipewire-audio: native voice dictation capture
+	optdepends = speech-dispatcher: native Read Aloud support
+	optdepends = pacman-contrib: accurate package update checks
+	optdepends = polkit: authenticated graphical package updates and rollbacks
+	optdepends = llama.cpp: supervised Qwen Buddy MTP runtime (CUDA or Vulkan build recommended)
+	optdepends = nvidia-utils: Qwen Buddy GPU pressure and workload telemetry on NVIDIA systems
+	optdepends = spectacle: focused-window AppShots on KDE Plasma
+	optdepends = gnome-screenshot: focused-window AppShots on GNOME
+	optdepends = 7zip: safely extract official macOS DMGs for parity inventory
+	optdepends = libarchive: alternate macOS DMG extractor
+	options = !lto
+
+pkgname = codex-native

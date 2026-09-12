@@ -1,0 +1,435 @@
+window {
+  font-family: system-ui, sans-serif;
+  font-size: 14px;
+}
+
+headerbar {
+  border-bottom: 1px solid alpha(@borders, 0.55);
+}
+
+.sidebar {
+  background: color-mix(in srgb, @window_bg_color 92%, @accent_bg_color 8%);
+  border-right: 1px solid alpha(@borders, 0.65);
+}
+
+.sidebar-title {
+  font-weight: 700;
+  font-size: 1.05rem;
+}
+
+.brand-icon-chatgpt {
+  background: #ffffff;
+  border-radius: 50%;
+  padding: 2px;
+}
+
+.sidebar-navigation {
+  min-height: 0;
+}
+
+.sidebar-navigation > box {
+  padding: 2px 2px 0;
+}
+
+.nav-item {
+  border-radius: 9px;
+}
+
+.nav-item-active {
+  background: alpha(@accent_bg_color, 0.18);
+  color: @accent_color;
+  box-shadow: inset 3px 0 alpha(@accent_bg_color, 0.82);
+}
+
+.thread-row {
+  border-radius: 9px;
+  padding: 8px 10px;
+  min-height: 42px;
+}
+
+.thread-row:hover {
+  background: alpha(@accent_bg_color, 0.12);
+}
+
+.thread-row-active {
+  background: alpha(@accent_bg_color, 0.30);
+  border: 1px solid alpha(@accent_bg_color, 0.72);
+  box-shadow: inset 4px 0 @accent_bg_color;
+  font-weight: 600;
+}
+
+.thread-row-bulk-selected {
+  background: alpha(@accent_bg_color, 0.20);
+  border: 1px solid alpha(@accent_bg_color, 0.52);
+}
+
+.task-selection-mark {
+  color: @accent_color;
+  font-size: 1.05rem;
+  min-width: 18px;
+}
+
+.task-bulk-bar {
+  padding: 5px 6px;
+  border-radius: 9px;
+  background: alpha(@accent_bg_color, 0.10);
+  border: 1px solid alpha(@borders, 0.45);
+}
+
+.task-running-spinner {
+  color: @window_fg_color;
+  opacity: 0.72;
+  margin-left: 4px;
+  min-width: 14px;
+  min-height: 14px;
+}
+
+.task-agent-badge {
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: alpha(@accent_bg_color, 0.18);
+  color: @accent_color;
+  font-weight: 650;
+}
+
+.task-model-badge {
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: alpha(@success_bg_color, 0.22);
+  color: @success_color;
+  font-weight: 650;
+}
+
+.transcript {
+  background: transparent;
+  padding: 0 18px;
+}
+
+.transcript-clamp {
+  background: transparent;
+}
+
+.workspace-toolbar {
+  padding: 8px 12px;
+  border-bottom: 1px solid alpha(@borders, 0.55);
+  background: alpha(@headerbar_bg_color, 0.96);
+}
+
+.message-card {
+  border-radius: 14px;
+  padding: 10px 14px;
+  margin: 2px 4px;
+}
+
+.message-user {
+  background: alpha(@accent_bg_color, 0.15);
+  border: 1px solid alpha(@accent_bg_color, 0.24);
+}
+
+.message-assistant {
+  background: transparent;
+  border: none;
+  padding-top: 12px;
+  padding-bottom: 12px;
+}
+
+.message-tool {
+  background: alpha(@view_bg_color, 0.34);
+  border: 1px solid alpha(@borders, 0.30);
+}
+
+.message-role-row {
+  opacity: 0.70;
+}
+
+.message-error {
+  background: alpha(@error_bg_color, 0.14);
+  border: 1px solid alpha(@error_color, 0.45);
+}
+
+.message-role {
+  font-weight: 600;
+  font-size: 0.78rem;
+  opacity: 0.82;
+}
+
+.markdown-view {
+  background: transparent;
+  font-size: 15px;
+}
+
+.markdown-view text {
+  background: transparent;
+}
+
+.code-block-shell,
+.settings-card {
+  border: 1px solid alpha(@borders, 0.62);
+  border-radius: 10px;
+  background: alpha(@card_bg_color, 0.85);
+}
+
+.tool-card,
+.reasoning-card {
+  border: none;
+  border-radius: 9px;
+  background: transparent;
+}
+
+.code-block-toolbar {
+  padding: 5px 8px;
+  border-bottom: 1px solid alpha(@borders, 0.48);
+}
+
+.settings-card {
+  padding: 10px 12px;
+  margin: 3px 0;
+}
+
+.tool-card {
+  padding: 4px 10px;
+  margin: 0 8px;
+  color: alpha(@window_fg_color, 0.70);
+}
+
+.tool-card:hover,
+.reasoning-card:hover {
+  background: alpha(@view_bg_color, 0.38);
+}
+
+.tool-card-header {
+  padding: 3px 2px;
+}
+
+.tool-card-icon {
+  color: alpha(@window_fg_color, 0.62);
+}
+
+.tool-card-summary {
+  font-size: 0.84rem;
+  color: alpha(@window_fg_color, 0.64);
+}
+
+.image-activity-row {
+  margin: 0 8px;
+  padding: 5px 10px;
+  border-radius: 9px;
+  color: alpha(@window_fg_color, 0.72);
+}
+
+.image-activity-row:hover {
+  background: alpha(@view_bg_color, 0.44);
+  color: @window_fg_color;
+}
+
+.image-activity-group {
+  margin-bottom: 3px;
+}
+
+.image-thumbnail-scroller,
+.image-thumbnail-strip {
+  background: transparent;
+}
+
+.image-thumbnail-strip {
+  margin: 0 18px 5px;
+}
+
+.image-thumbnail {
+  min-width: 92px;
+  min-height: 72px;
+  padding: 0;
+  border-radius: 9px;
+  border: 1px solid alpha(@borders, 0.62);
+  background: alpha(@view_bg_color, 0.65);
+}
+
+.image-thumbnail:hover {
+  border-color: alpha(@accent_color, 0.78);
+  box-shadow: 0 2px 8px alpha(black, 0.16);
+}
+
+.file-action-row {
+  margin: 1px 2px 5px 24px;
+}
+
+.file-action {
+  padding: 3px 8px;
+  border-radius: 7px;
+  font-size: 0.82rem;
+}
+
+.task-progress-pill {
+  margin: 12px 8px 4px;
+  padding: 8px 13px;
+  border-radius: 999px;
+  border: 1px solid alpha(@borders, 0.60);
+  background: color-mix(in srgb, @card_bg_color 92%, @accent_bg_color 8%);
+  box-shadow: 0 3px 12px alpha(black, 0.12);
+}
+
+.task-progress-step {
+  font-weight: 650;
+}
+
+.plan-tooltip {
+  padding: 4px 3px;
+}
+
+.plan-tooltip-completed {
+  color: @success_color;
+  font-weight: 700;
+}
+
+.plan-tooltip-current {
+  color: @accent_color;
+}
+
+.plan-tooltip-current-label {
+  font-weight: 650;
+}
+
+.plan-tooltip-pending {
+  color: alpha(@window_fg_color, 0.72);
+  font-size: 1.15rem;
+}
+
+.progress-additions {
+  color: @success_color;
+  font-weight: 650;
+}
+
+.progress-deletions {
+  color: @error_color;
+  font-weight: 650;
+}
+
+.image-viewer-picture {
+  background: #101216;
+}
+
+.image-viewer-error {
+  padding: 18px;
+  border-radius: 10px;
+  background: alpha(@error_bg_color, 0.16);
+  color: @error_color;
+}
+
+.reasoning-card {
+  padding: 5px 10px;
+  margin: 1px 8px;
+  color: alpha(@window_fg_color, 0.68);
+}
+
+.tool-card sourceview,
+.code-block-shell sourceview {
+  background: #16191f;
+}
+
+.source-code-view,
+.source-code-view text {
+  font-size: 13px;
+}
+
+.code-scroller,
+.tool-output {
+  border-radius: 8px;
+  border: 1px solid alpha(@borders, 0.56);
+  background: #16191f;
+  margin-top: 6px;
+}
+
+.composer-shell {
+  margin: 10px 18px 16px;
+  border: 1px solid alpha(@borders, 0.72);
+  border-radius: 18px;
+  background: color-mix(in srgb, @card_bg_color 94%, @accent_bg_color 6%);
+  box-shadow: 0 6px 22px alpha(black, 0.16);
+  padding: 9px;
+}
+
+.composer-shell textview,
+.composer-shell textview text {
+  background: transparent;
+  font-size: 15px;
+}
+
+.composer-placeholder {
+  color: alpha(@window_fg_color, 0.42);
+  font-size: 15px;
+}
+
+.routing-row {
+  margin: 1px 2px 3px;
+}
+
+.routing-status {
+  color: alpha(@window_fg_color, 0.72);
+}
+
+.route-receipt {
+  margin: 2px 8px;
+  padding: 5px 10px;
+  border-radius: 999px;
+  border: 1px solid alpha(@accent_color, 0.30);
+  background: alpha(@accent_bg_color, 0.10);
+  color: alpha(@window_fg_color, 0.74);
+  font-size: 0.82rem;
+}
+
+.token-savings-receipt {
+  border-color: alpha(@success_color, 0.34);
+  background: alpha(@success_bg_color, 0.10);
+}
+
+.approval-bar {
+  background: alpha(@warning_bg_color, 0.16);
+  border-bottom: 1px solid alpha(@warning_color, 0.45);
+  padding: 9px 14px;
+}
+
+.connection-ready { color: @success_color; }
+.connection-busy { color: @warning_color; }
+.connection-error { color: @error_color; }
+.memoria-jobs-active {
+  color: @error_color;
+  font-weight: 700;
+}
+
+.panel-title {
+  font-weight: 700;
+  font-size: 1.35rem;
+}
+
+.muted { opacity: 0.68; }
+.warning { color: @warning_color; }
+.monospace { font-family: monospace; }
+
+.webview-frame {
+  border: 1px solid alpha(@borders, 0.72);
+  border-radius: 10px;
+  background: @view_bg_color;
+}
+
+.remote-code {
+  font-family: monospace;
+  font-size: 1.65rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  padding: 16px;
+  border-radius: 10px;
+  background: alpha(@accent_bg_color, 0.12);
+  border: 1px solid alpha(@accent_color, 0.35);
+}
+
+.remote-warning {
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: alpha(@warning_bg_color, 0.15);
+  border: 1px solid alpha(@warning_color, 0.38);
+}
+
+.terminal {
+  padding: 7px;
+  background: #101216;
+}

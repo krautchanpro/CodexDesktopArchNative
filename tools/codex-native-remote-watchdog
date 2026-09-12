@@ -1,0 +1,447 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+unit="${CODEX_WATCHDOG_UNIT:-codex-native-remote.service}"
+control_socket="${CODEX_WATCHDOG_CONTROL_SOCKET:-${HOME}/.codex/app-server-control/app-server-control.sock}"
+log_db="${CODEX_WATCHDOG_LOG_DB:-${HOME}/.codex/logs_2.sqlite}"
+runtime_dir="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
+state_file="${CODEX_WATCHDOG_STATE_FILE:-${runtime_dir}/codex-native-remote-watchdog.state}"
+dry_run="${CODEX_WATCHDOG_DRY_RUN:-0}"
+force_heartbeat_failure="${CODEX_WATCHDOG_FORCE_HEARTBEAT_FAILURE:-0}"
+force_control_probe_failure="${CODEX_WATCHDOG_FORCE_CONTROL_PROBE_FAILURE:-0}"
+force_memory_pressure="${CODEX_WATCHDOG_FORCE_MEMORY_PRESSURE:-0}"
+force_remote_failure="${CODEX_WATCHDOG_FORCE_REMOTE_FAILURE:-0}"
+force_model_refresh_failures="${CODEX_WATCHDOG_FORCE_MODEL_REFRESH_FAILURES:-0}"
+force_active_work="${CODEX_WATCHDOG_FORCE_ACTIVE_WORK:-auto}"
+remote_stale_seconds="${CODEX_WATCHDOG_REMOTE_STALE_SECONDS:-90}"
+required_misses="${CODEX_WATCHDOG_REQUIRED_MISSES:-3}"
+startup_grace_seconds="${CODEX_WATCHDOG_STARTUP_GRACE_SECONDS:-90}"
+active_work_deferral_seconds="${CODEX_WATCHDOG_ACTIVE_WORK_DEFERRAL_SECONDS:-300}"
+control_probe_timeout_seconds="${CODEX_WATCHDOG_CONTROL_PROBE_TIMEOUT_SECONDS:-8}"
+model_refresh_window_seconds="${CODEX_WATCHDOG_MODEL_REFRESH_WINDOW_SECONDS:-900}"
+model_refresh_failure_limit="${CODEX_WATCHDOG_MODEL_REFRESH_FAILURE_LIMIT:-3}"
+
+if [[ ! "${remote_stale_seconds}" =~ ^[0-9]+$ ]]; then
+  /usr/bin/printf 'Invalid CODEX_WATCHDOG_REMOTE_STALE_SECONDS: %s\n' "${remote_stale_seconds}" >&2
+  exit 2
+fi
+if [[ ! "${required_misses}" =~ ^[1-9][0-9]*$ ]]; then
+  /usr/bin/printf 'Invalid CODEX_WATCHDOG_REQUIRED_MISSES: %s\n' "${required_misses}" >&2
+  exit 2
+fi
+if [[ ! "${startup_grace_seconds}" =~ ^[0-9]+$ ]]; then
+  /usr/bin/printf 'Invalid CODEX_WATCHDOG_STARTUP_GRACE_SECONDS: %s\n' "${startup_grace_seconds}" >&2
+  exit 2
+fi
+if [[ ! "${active_work_deferral_seconds}" =~ ^[0-9]+$ ]]; then
+  /usr/bin/printf 'Invalid CODEX_WATCHDOG_ACTIVE_WORK_DEFERRAL_SECONDS: %s\n' "${active_work_deferral_seconds}" >&2
+  exit 2
+fi
+if [[ ! "${control_probe_timeout_seconds}" =~ ^[1-9][0-9]*$ ]]; then
+  /usr/bin/printf 'Invalid CODEX_WATCHDOG_CONTROL_PROBE_TIMEOUT_SECONDS: %s\n' "${control_probe_timeout_seconds}" >&2
+  exit 2
+fi
+if [[ ! "${model_refresh_window_seconds}" =~ ^[1-9][0-9]*$ ]]; then
+  /usr/bin/printf 'Invalid CODEX_WATCHDOG_MODEL_REFRESH_WINDOW_SECONDS: %s\n' "${model_refresh_window_seconds}" >&2
+  exit 2
+fi
+if [[ ! "${model_refresh_failure_limit}" =~ ^[1-9][0-9]*$ ]]; then
+  /usr/bin/printf 'Invalid CODEX_WATCHDOG_MODEL_REFRESH_FAILURE_LIMIT: %s\n' "${model_refresh_failure_limit}" >&2
+  exit 2
+fi
+
+# The timer serializes ordinary runs, but a manual diagnostic invocation can
+# overlap it. Keep the persisted miss counters coherent in either case.
+exec 9>"${state_file}.lock"
+if ! /usr/bin/flock --nonblock 9; then
+  exit 0
+fi
+
+misses=0
+memory_initialized=0
+previous_service_active_epoch=0
+previous_high=0
+previous_max=0
+previous_oom=0
+previous_oom_kill=0
+unhealthy_since=0
+
+if [[ -r "${state_file}" ]]; then
+  while IFS='=' read -r key value; do
+    [[ "${value}" =~ ^[0-9]+$ ]] || continue
+    case "${key}" in
+      misses) misses="${value}" ;;
+      memory_initialized) memory_initialized="${value}" ;;
+      service_active_epoch) previous_service_active_epoch="${value}" ;;
+      memory_high) previous_high="${value}" ;;
+      memory_max) previous_max="${value}" ;;
+      memory_oom) previous_oom="${value}" ;;
+      memory_oom_kill) previous_oom_kill="${value}" ;;
+      unhealthy_since) unhealthy_since="${value}" ;;
+    esac
+  done < "${state_file}"
+fi
+
+current_high="${previous_high}"
+current_max="${previous_max}"
+current_oom="${previous_oom}"
+current_oom_kill="${previous_oom_kill}"
+current_memory_initialized="${memory_initialized}"
+current_service_active_epoch="${previous_service_active_epoch}"
+
+write_state() {
+  local temporary_state_file="${state_file}.tmp.$$"
+  /usr/bin/printf \
+    'misses=%s\nmemory_initialized=%s\nservice_active_epoch=%s\nmemory_high=%s\nmemory_max=%s\nmemory_oom=%s\nmemory_oom_kill=%s\nunhealthy_since=%s\n' \
+    "${misses}" \
+    "${current_memory_initialized}" \
+    "${current_service_active_epoch}" \
+    "${current_high}" \
+    "${current_max}" \
+    "${current_oom}" \
+    "${current_oom_kill}" \
+    "${unhealthy_since}" > "${temporary_state_file}"
+  /usr/bin/mv -f -- "${temporary_state_file}" "${state_file}"
+}
+
+has_active_work() {
+  local candidate_main_pid="$1"
+  local active_cgroup_path
+  local active_cgroup_processes
+  local process_id
+  local process_command
+
+  [[ "${candidate_main_pid}" =~ ^[1-9][0-9]*$ ]] || return 1
+  [[ -r "/proc/${candidate_main_pid}/cgroup" ]] || return 1
+  active_cgroup_path="$(
+    /usr/bin/awk -F: '$1 == "0" { print $3; exit }' "/proc/${candidate_main_pid}/cgroup"
+  )"
+  active_cgroup_processes="/sys/fs/cgroup${active_cgroup_path}/cgroup.procs"
+  [[ -r "${active_cgroup_processes}" ]] || return 1
+
+  while IFS= read -r process_id; do
+    [[ "${process_id}" == "${candidate_main_pid}" ]] && continue
+    [[ -r "/proc/${process_id}/cmdline" ]] || continue
+    process_command="$(/usr/bin/tr '\0' ' ' < "/proc/${process_id}/cmdline" 2>/dev/null || true)"
+    [[ -n "${process_command}" ]] || continue
+
+    # These are the app-server's idle, persistent helpers. Any other process
+    # is active user work and inhibits watchdog recovery.
+    case "${process_command}" in
+      *'/codex-code-mode-host'* \
+        |*'/codex-computer-use-linux mcp'* \
+        |*'/codex-native-macro '* \
+        |*'/resources/node_repl'* \
+        |*'node '*'memoria-mcp'* \
+        |*'node ./scripts/server.mjs'* \
+        |*'node ./mcp/server.mjs'*)
+        continue
+        ;;
+    esac
+    return 0
+  done < "${active_cgroup_processes}"
+
+  return 1
+}
+
+read_memory_event() {
+  local events_file="$1"
+  local event_name="$2"
+  local value
+
+  value="$(
+    /usr/bin/awk -v event_name="${event_name}" \
+      '$1 == event_name { print $2; found = 1; exit } END { if (!found) print 0 }' \
+      "${events_file}"
+  )"
+  [[ "${value}" =~ ^[0-9]+$ ]] || value=0
+  /usr/bin/printf '%s\n' "${value}"
+}
+
+healthy=true
+declare -a reasons=()
+
+mark_unhealthy() {
+  healthy=false
+  reasons+=("$1")
+}
+
+main_pid=0
+service_active_epoch=0
+active_work=false
+unit_active_state="$(/usr/bin/systemctl --user show --property=ActiveState --value "${unit}" 2>/dev/null || true)"
+if [[ "${unit_active_state}" == "activating" ]]; then
+  # A slow but valid startup must not accumulate misses and recycle itself.
+  misses=0
+  write_state
+  exit 0
+elif [[ "${unit_active_state}" == "active" ]]; then
+  main_pid="$(/usr/bin/systemctl --user show --property=MainPID --value "${unit}")"
+  service_active_timestamp="$(
+    /usr/bin/systemctl --user show --property=ActiveEnterTimestamp --value "${unit}"
+  )"
+  service_active_epoch="$(
+    /usr/bin/date --date="${service_active_timestamp}" +%s 2>/dev/null || /usr/bin/printf '0'
+  )"
+  [[ "${service_active_epoch}" =~ ^[0-9]+$ ]] || service_active_epoch=0
+  current_service_active_epoch="${service_active_epoch}"
+  if (( service_active_epoch != previous_service_active_epoch )); then
+    # memory.events counters belong to one cgroup generation. Reset the
+    # baseline when systemd starts a new remote-host process so its first OOM
+    # cannot be hidden by a larger counter retained from the previous cgroup.
+    memory_initialized=0
+    current_memory_initialized=0
+    current_high=0
+    current_max=0
+    current_oom=0
+    current_oom_kill=0
+    unhealthy_since=0
+  fi
+  if ! [[ "${main_pid}" =~ ^[1-9][0-9]*$ ]] || [[ ! -d "/proc/${main_pid}" ]]; then
+    mark_unhealthy "service has no live main process"
+  elif [[ ! -S "${control_socket}" ]]; then
+    mark_unhealthy "control socket is missing"
+  elif ! /usr/bin/ss -xlH | /usr/bin/grep -F -- "${control_socket}" >/dev/null; then
+    mark_unhealthy "control socket has no listener"
+  elif [[ "${force_control_probe_failure}" == "1" ]]; then
+    mark_unhealthy "app-server control probe failed (forced test)"
+  else
+    # A listening Unix socket does not prove that the app-server event loop is
+    # responsive. Ask Codex to probe the managed daemon and bound the request;
+    # this catches a live-but-wedged process that systemd cannot distinguish
+    # from a healthy service.
+    control_probe_output="$(
+      /usr/bin/timeout --signal=KILL "${control_probe_timeout_seconds}s" \
+        /usr/bin/codex app-server daemon version 2>/dev/null || true
+    )"
+    if ! /usr/bin/printf '%s\n' "${control_probe_output}" \
+      | /usr/bin/grep -Eq '"status"[[:space:]]*:[[:space:]]*"running"'; then
+      mark_unhealthy "app-server did not answer its control probe within ${control_probe_timeout_seconds}s"
+    fi
+  fi
+
+  if has_active_work "${main_pid}"; then
+    active_work=true
+  fi
+else
+  current_service_active_epoch=0
+  mark_unhealthy "service is inactive"
+fi
+
+case "${force_active_work}" in
+  0) active_work=false ;;
+  1) active_work=true ;;
+  auto) ;;
+  *)
+    /usr/bin/printf 'Invalid CODEX_WATCHDOG_FORCE_ACTIVE_WORK: %s\n' "${force_active_work}" >&2
+    exit 2
+    ;;
+esac
+
+if (( service_active_epoch > 0 )); then
+  now_epoch="$(/usr/bin/date +%s)"
+  if (( now_epoch - service_active_epoch < startup_grace_seconds )); then
+    misses=0
+    unhealthy_since=0
+    write_state
+    exit 0
+  fi
+fi
+
+heartbeat_event=""
+if [[ "${force_heartbeat_failure}" == "1" ]]; then
+  heartbeat_event="managed app-server stopped answering heartbeats (forced test)"
+else
+  heartbeat_event="$(
+    /usr/bin/journalctl --user \
+      --quiet \
+      --no-pager \
+      --since '-75 seconds' \
+      --lines 1 \
+      --output cat \
+      _COMM=codex-native \
+      --grep 'connected to managed Codex app-server transport|managed app-server stopped answering heartbeats|managed app-server connection timed out' \
+      2>/dev/null || true
+  )"
+fi
+
+case "${heartbeat_event}" in
+  *"managed app-server stopped answering heartbeats"*|*"managed app-server connection timed out"*)
+    mark_unhealthy "Codex Native reports an app-server heartbeat failure"
+    ;;
+esac
+
+# A locally responsive app-server can still be internally wedged while its
+# model-manager helper repeatedly fails to exit. Require several failures in
+# a bounded window, and ignore events from older service generations so one
+# incident cannot create a restart loop.
+model_refresh_failure_count=0
+if [[ "${force_model_refresh_failures}" =~ ^[0-9]+$ ]] \
+  && (( force_model_refresh_failures > 0 )); then
+  model_refresh_failure_count="${force_model_refresh_failures}"
+elif [[ ! "${force_model_refresh_failures}" =~ ^[0-9]+$ ]]; then
+  /usr/bin/printf 'Invalid CODEX_WATCHDOG_FORCE_MODEL_REFRESH_FAILURES: %s\n' "${force_model_refresh_failures}" >&2
+  exit 2
+elif (( service_active_epoch > 0 )); then
+  now_epoch="$(/usr/bin/date +%s)"
+  model_refresh_since_epoch=$((now_epoch - model_refresh_window_seconds))
+  if (( service_active_epoch > model_refresh_since_epoch )); then
+    model_refresh_since_epoch="${service_active_epoch}"
+  fi
+  model_refresh_failure_count="$(
+    { /usr/bin/journalctl --user \
+        --quiet \
+        --no-pager \
+        --unit "${unit}" \
+        --since "@${model_refresh_since_epoch}" \
+        --output cat \
+        --grep 'failed to refresh available models: timeout waiting for child process to exit' \
+        2>/dev/null \
+        || true; } \
+      | /usr/bin/wc -l
+  )"
+  model_refresh_failure_count="${model_refresh_failure_count//[[:space:]]/}"
+  [[ "${model_refresh_failure_count}" =~ ^[0-9]+$ ]] || model_refresh_failure_count=0
+fi
+
+if (( model_refresh_failure_count >= model_refresh_failure_limit )); then
+  mark_unhealthy "model manager stalled ${model_refresh_failure_count} times within ${model_refresh_window_seconds}s"
+fi
+
+# The managed app-server can remain locally healthy while its remote-control
+# WebSocket is stuck in Connecting or Errored. Allow ordinary reconnects to
+# settle, then recycle the complete service only when the latest reported
+# state has remained non-Connected past the grace period. Active work delays
+# recovery for a bounded interval so a genuinely wedged tool cannot inhibit
+# recovery forever.
+remote_status_event=""
+if [[ "${force_remote_failure}" == "1" ]]; then
+  remote_status_event="$(( $(/usr/bin/date +%s) - remote_stale_seconds - 1 ))|remote control websocket status changed next_status=Errored (forced test)"
+elif [[ -r "${log_db}" ]] && [[ -x /usr/bin/sqlite3 ]]; then
+  remote_status_event="$(
+    /usr/bin/sqlite3 \
+      -readonly \
+      -cmd '.timeout 1000' \
+      -separator '|' \
+      "${log_db}" \
+      "SELECT ts, feedback_log_body
+         FROM logs
+        WHERE target = 'codex_app_server_transport::transport::remote_control::websocket'
+          AND feedback_log_body LIKE 'remote control websocket status changed%'
+        ORDER BY ts DESC, ts_nanos DESC, id DESC
+        LIMIT 1;" \
+      2>/dev/null || true
+  )"
+fi
+
+if [[ "${remote_status_event}" == *"|"* ]]; then
+  remote_status_ts="${remote_status_event%%|*}"
+  remote_status_message="${remote_status_event#*|}"
+  # A previous app-server's final state is not evidence about the current
+  # process. Without this generation check, one old Errored event can recycle
+  # a healthy host hours later and terminate active tool calls.
+  if (( service_active_epoch > 0 )) \
+    && [[ "${remote_status_ts}" =~ ^[0-9]+$ ]] \
+    && (( remote_status_ts >= service_active_epoch )) \
+    && [[ "${remote_status_message}" != *"next_status=Connected"* ]]; then
+    now_epoch="$(/usr/bin/date +%s)"
+    remote_status_age=$((now_epoch - remote_status_ts))
+    if (( remote_status_age >= remote_stale_seconds )); then
+      mark_unhealthy "remote-control WebSocket has been non-Connected for ${remote_status_age}s"
+    fi
+  fi
+fi
+
+if [[ "${main_pid}" =~ ^[1-9][0-9]*$ ]] && [[ -r "/proc/${main_pid}/cgroup" ]]; then
+  cgroup_relative_path="$(
+    /usr/bin/awk -F: '$1 == "0" { print $3; exit }' "/proc/${main_pid}/cgroup"
+  )"
+  memory_events_file="${CODEX_WATCHDOG_MEMORY_EVENTS_FILE:-/sys/fs/cgroup${cgroup_relative_path}/memory.events}"
+
+  if [[ -r "${memory_events_file}" ]]; then
+    current_high="$(read_memory_event "${memory_events_file}" high)"
+    current_max="$(read_memory_event "${memory_events_file}" max)"
+    current_oom="$(read_memory_event "${memory_events_file}" oom)"
+    current_oom_kill="$(read_memory_event "${memory_events_file}" oom_kill)"
+    current_memory_initialized=1
+
+    # memory.high and memory.max are pressure/throttling counters, not proof
+    # that the app-server is unhealthy. Long active turns can increment them
+    # repeatedly while the control socket and heartbeat remain healthy.
+    # Restart only after an actual cgroup OOM event; socket and heartbeat
+    # failures are handled independently above.
+    if [[ "${memory_initialized}" == "1" ]] \
+      && (( current_oom > previous_oom \
+        || current_oom_kill > previous_oom_kill )); then
+      mark_unhealthy "Codex cgroup recorded a new OOM event"
+    fi
+  fi
+fi
+
+if [[ "${force_memory_pressure}" == "1" ]]; then
+  mark_unhealthy "Codex cgroup memory pressure (forced test)"
+fi
+
+if [[ "${healthy}" == true ]]; then
+  misses=0
+  unhealthy_since=0
+  write_state
+  exit 0
+fi
+
+now_epoch="$(/usr/bin/date +%s)"
+if (( unhealthy_since == 0 )); then
+  unhealthy_since="${now_epoch}"
+fi
+misses=$((misses + 1))
+write_state
+
+reason_text="$(
+  IFS='; '
+  /usr/bin/printf '%s' "${reasons[*]}"
+)"
+
+if (( misses < required_misses )); then
+  /usr/bin/systemd-cat --identifier=codex-native-remote-watchdog \
+    /usr/bin/printf 'Remote host health check miss %s/%s: %s\n' "${misses}" "${required_misses}" "${reason_text}"
+  exit 0
+fi
+
+misses=0
+write_state
+
+# Close the scan-to-restart race. A tool may have started after the initial
+# health check. Preserve it during the bounded deferral, but eventually favor
+# restoring the remote connection over retaining work that is likely wedged.
+main_pid="$(/usr/bin/systemctl --user show --property=MainPID --value "${unit}" 2>/dev/null || true)"
+recovery_active_work=false
+if has_active_work "${main_pid}"; then
+  recovery_active_work=true
+fi
+case "${force_active_work}" in
+  0) recovery_active_work=false ;;
+  1) recovery_active_work=true ;;
+esac
+
+unhealthy_age=$((now_epoch - unhealthy_since))
+if [[ "${recovery_active_work}" == true ]] && (( unhealthy_age < active_work_deferral_seconds )); then
+  misses=$((required_misses - 1))
+  write_state
+  /usr/bin/systemd-cat --identifier=codex-native-remote-watchdog \
+    /usr/bin/printf 'Remote host recovery deferred for active work (%ss/%ss): %s\n' "${unhealthy_age}" "${active_work_deferral_seconds}" "${reason_text}"
+  exit 0
+fi
+
+if [[ "${dry_run}" == "1" ]]; then
+  /usr/bin/printf 'Would restart %s after %s failed checks and %ss unhealthy: %s\n' "${unit}" "${required_misses}" "${unhealthy_age}" "${reason_text}"
+  exit 0
+fi
+
+if [[ "${recovery_active_work}" == true ]]; then
+  /usr/bin/systemd-cat --identifier=codex-native-remote-watchdog \
+    /usr/bin/printf 'Active work did not recover within %ss; forcing remote-host recovery: %s\n' "${active_work_deferral_seconds}" "${reason_text}"
+fi
+
+/usr/bin/systemd-cat --identifier=codex-native-remote-watchdog \
+  /usr/bin/printf 'Remote host failed %s consecutive health checks; restarting complete control group: %s\n' "${required_misses}" "${reason_text}"
+/usr/bin/systemctl --user restart "${unit}"

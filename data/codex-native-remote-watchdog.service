@@ -1,0 +1,17 @@
+[Unit]
+Description=Codex Native remote-host recovery check
+After=codex-native-remote.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/lib/codex-native/codex-native-remote-watchdog
+# A wedged health check must not block future timer invocations indefinitely.
+# Recovery can legitimately wait for the remote host's bounded stop/start path.
+TimeoutStartSec=90s
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=%t
+MemoryMax=128M
+CPUQuota=20%

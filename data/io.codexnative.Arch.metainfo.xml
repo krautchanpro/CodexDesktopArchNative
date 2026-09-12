@@ -1,0 +1,404 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>io.codexnative.Arch</id>
+  <name>Codex Native</name>
+  <summary>A native Codex desktop client for Arch Linux</summary>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>MIT</project_license>
+  <description>
+    <p>
+      Codex Native is a GTK4 and libadwaita client for Codex. It provides task
+      history, streaming conversations, approvals, syntax-highlighted code and
+      diffs, isolated Agent Workspaces, a VTE terminal, scheduled tasks, plugins
+      and tools, native Linux Computer Use, Qwen Buddy local delegation
+      controls, voice, and experimental pairing with ChatGPT on iOS. Repository
+      operations are handled by the installed GitHub plugin or another
+      user-chosen Git tool.
+    </p>
+    <p>
+      Markdown is rendered with native GTK text tags and Pango. The application
+      does not use Chromium, Electron, or Tauri. One lazy, isolated WebKitGTK
+      surface provides same-window ChatGPT Pro chat and Voice; Codex tasks,
+      Markdown, diffs, and the rest of the interface remain native GTK.
+    </p>
+  </description>
+  <launchable type="desktop-id">io.codexnative.Arch.desktop</launchable>
+  <provides>
+    <binary>codex-native</binary>
+  </provides>
+  <developer id="io.codexnative">
+    <name>Codex Native contributors</name>
+  </developer>
+  <url type="homepage">https://github.com/krautchanpro/CodexDesktopArchNative</url>
+  <releases>
+    <release version="0.7.1" date="2026-07-31">
+      <description>
+        <p>Removes Native's source-control, pull-request, review, commit,
+        synchronization, and worktree surfaces. Scheduled tasks now run directly
+        in their selected folders, and Native is independent of the official
+        Codex desktop application's release checks.</p>
+        <p>Repository operations remain available through the installed GitHub
+        plugin or another user-chosen Git tool.</p>
+      </description>
+    </release>
+    <release version="0.7.0" date="2026-07-28">
+      <description>
+        <p>Expands Native Macro Execution with compact output previews and
+        durable handles, content-aware read caching, conditional DAG steps,
+        hash-checked atomic writes and patches, dry-run mutation plans, and
+        exact follow-up output reads.</p>
+        <p>Adds p50/p95 latency, cache, artifact, context-avoidance, and
+        app-server token-category telemetry while preserving the networkless
+        command sandbox, normal approval handling, and ordinary-tool fallback
+        for unsupported or adaptive work.</p>
+        <p>Keeps user and assistant messages durable when long-running turns
+        exceed the live activity cap, and keeps canonical-history recovery
+        active while other visible workspace pages are open so returning to
+        Chat cannot expose a stale partial transcript.</p>
+      </description>
+    </release>
+    <release version="0.6.10" date="2026-07-26">
+      <description>
+        <p>Restores missing Native and iOS conversation history when the stock
+        Codex paginated-history projector skips a rate-limit record and leaves
+        its SQLite cursor permanently behind. Native now detects only the
+        proven neutral-record gap, creates a consistent database backup, and
+        repairs the rebuildable shared projection in one guarded transaction
+        without modifying the canonical rollout.</p>
+        <p>The active Native transcript also merges a bounded read-only view of
+        the canonical rollout, follows live iOS appends, survives task
+        switching, and preserves richer server-projected tool and image cards.
+        Recovery work runs off the GTK thread and is fingerprinted, bounded,
+        and skipped safely when Codex changes its database schema.</p>
+      </description>
+    </release>
+    <release version="0.6.9" date="2026-07-26">
+      <description>
+        <p>Retires the version-coupled patched Remote Control router. Native
+        and iOS now use the official managed Codex host directly, so Codex
+        updates no longer require rebuilding or activating a matching custom
+        binary.</p>
+        <p>Task Auto mode is now Qwen Assist: it preserves the task&apos;s selected
+        Codex model, reasoning, speed, sandbox, and approval settings while
+        selecting one eligible bounded Qwen Buddy subagent lane when available.
+        Manual mode keeps work with Codex. Model-router profiles, automatic
+        effort changes, the Sol Max lock, router services, patches, and build
+        tooling have been removed.</p>
+      </description>
+    </release>
+    <release version="0.6.8" date="2026-07-26">
+      <description>
+        <p>Repairs iOS and Native transcript convergence for paginated tasks.
+        Token-usage records now deserialize safely, stale history cursors
+        rebuild from the canonical JSONL transcript, and indexed reads catch
+        up before serving pages or search results.</p>
+        <p>Native falls back to an explicit bounded history request when a
+        resume response omits its initial page and refreshes the open task
+        after remote turn completion. Routed binaries now carry exact
+        version, patch, commit, and binary provenance so an older same-version
+        package can never be mislabeled as a newly patched router.</p>
+      </description>
+    </release>
+    <release version="0.6.7" date="2026-07-26">
+      <description>
+        <p>Adds task multi-selection with select-all/clear controls and fast
+        bulk archive, restore, and confirmation-gated deletion. Selected rows
+        remain visually and accessibly distinct while normal open-task
+        highlighting and right-click pinning continue to work unchanged.</p>
+      </description>
+    </release>
+    <release version="0.6.6" date="2026-07-25">
+      <description>
+        <p>Repairs bounded resume for multi-gigabyte legacy tasks whose latest
+        valid compaction and turn context occur inside one exceptionally long
+        turn. The router now resumes from that canonical checkpoint without
+        scanning the turn&apos;s full historical prefix or increasing its 128 MiB
+        memory-safety budget.</p>
+        <p>Router source caches are keyed by both Codex version and reviewed
+        patch revision, so same-version Native fixes always build from a clean
+        checkout. The task bar warns when append-only history reaches 1 GiB,
+        and recovery wording no longer falsely claims that no compaction
+        exists.</p>
+      </description>
+    </release>
+    <release version="0.6.5" date="2026-07-25">
+      <description>
+        <p>Auto Max Savings now treats a selected Qwen lane as a required first
+        local subagent when its safety contract can be satisfied. Safe coding
+        turns can delegate their highest-value bounded investigation or
+        one-file proposal to Qwen Sol before Codex integrates and verifies the
+        wider change; desktop and routed iOS turns share the policy.</p>
+        <p>Per-turn zero-inference receipts now include successful Qwen usage
+        from hidden numeric MCP metadata. The conservative estimate counts
+        locally generated output ChatGPT did not generate plus condenser
+        context kept out of Codex, while excluding failed calls and
+        unobservable reasoning or input savings.</p>
+      </description>
+    </release>
+    <release version="0.6.4" date="2026-07-25">
+      <description>
+        <p>Makes Qwen Buddy available to bounded tasks in every project under
+        the user&apos;s Projects and Documents/Codex roots while preserving its
+        read-only, scoped-agent, test-allowlist, and secret-exclusion
+        boundaries.</p>
+        <p>Adds a local-only receipt after each newly completed turn. It shows
+        a conservative potential token-savings estimate against Sol Max using
+        available app-server telemetry; the receipt is never inserted into the
+        prompt, conversation protocol, or model context.</p>
+      </description>
+    </release>
+    <release version="0.6.3" date="2026-07-25">
+      <description>
+        <p>Bounds legacy and paginated history loading, streams projection
+        batches, drops scanned Linux file-cache pages, unloads idle task and
+        MCP state after a short grace period, trims glibc arenas, and applies
+        protective Remote host memory and swap limits. New tasks use paginated
+        history; giant legacy tasks resume from a recent verified compaction or
+        offer a memory-safe continuation without consuming inference.</p>
+        <p>Replaces Auto Saver with two explicit per-turn policies. Balanced
+        routes only among appropriate ChatGPT 5.6 models and reasoning levels.
+        Max Savings begins from cheaper ChatGPT routes and can select exactly
+        one bounded Qwen Luna, Condenser, or Sol lane when scope, risk, plugin
+        readiness, and GPU capacity permit. Desktop and iOS use the same
+        policy, legacy Saver state migrates automatically, and Ultra remains
+        manual-only.</p>
+        <p>Streamlines feature parity into Check &amp; Analyze: official DMG
+        discovery, caching, inventory reuse, semantic delta analysis, and
+        report validation continue automatically when needed. Users still
+        explicitly select features and approve installation.</p>
+      </description>
+    </release>
+    <release version="0.6.2" date="2026-07-24">
+      <description>
+        <p>Splits upstream release probing from local protocol refreshes so an
+        unchanged DMG inventory is reused even when the Codex schema changes.
+        Changed DMGs are streamed and hashed once into a private two-release,
+        four-GiB cache. A bounded normalized delta feeds Luna Max, and
+        semantically unchanged checks reuse the existing validated report.</p>
+      </description>
+    </release>
+    <release version="0.6.1" date="2026-07-24">
+      <description>
+        <p>Keeps the optional Remote Control pre-turn router synchronized with
+        the managed Codex installation. A low-priority user service watches
+        exact official release tags, verifies the reviewed patch, normalizes
+        only workspace lockfile placeholders, runs the focused router tests,
+        and atomically publishes an exact-version binary. Activation waits for
+        all observed turns to become idle; failed or incompatible builds keep
+        the stock host online and retry with bounded backoff.</p>
+        <p>New profiles enable iOS pre-turn routing by default, while per-task
+        Manual mode still preserves the iOS model selection. Terminal
+        app-server events now clear every local running marker so completed
+        tasks cannot retain a stale sidebar spinner.</p>
+      </description>
+    </release>
+    <release version="0.6.0" date="2026-07-23">
+      <description>
+        <p>Adds an opt-in native Macro Executor on the existing shared
+        app-server. Validated dependency graphs batch bounded reads, searches,
+        atomic writes, and argv commands; independent reads run concurrently,
+        mutations use sorted file or workspace locks, and MCP cancellation
+        stops the execution tree. Commands run without network, host home, or
+        credentials inside bubblewrap and transient user-systemd memory,
+        process, output, and time limits. Only explicitly saved project roots
+        are accepted.</p>
+        <p>Adds prompt-free A/B telemetry for normal versus macro-assisted
+        app-server turns, including completion, tokens, elapsed time, tool-call
+        count, and available peak-memory measurements. The bounded private
+        ledgers never retain prompts, task IDs, paths, source, commands, or
+        output. The feature remains disabled by default while measurements are
+        collected.</p>
+        <p>Fixes Lean Context pressure accounting to use the current model
+        window instead of the cumulative thread total and suppresses automatic
+        retries when a compaction reports no reduction. The task bar now shows
+        current tokens, window capacity, percentage, and cumulative thread
+        tokens separately. Stop clones its active thread and turn identifiers
+        before mutating request state, preventing the prior RefCell crash.</p>
+      </description>
+    </release>
+    <release version="0.5.9" date="2026-07-20">
+      <description>
+        <p>Adds opt-in pre-inference routing for prompts sent through ChatGPT
+        iOS Remote Control. The routed host preserves the original thread,
+        text, images, attachments, sandbox, and approval data while applying
+        each task's Auto or Manual model policy before turn submission. Manual
+        and disabled policies pass through unchanged, corrupt policy fails open
+        to the stock request, automatic routes never select Ultra, and a
+        version guard falls back to the official host after upstream updates
+        until the isolated patch is rebuilt. The Remote host now runs as a
+        supervised foreground user service with automatic crash recovery.
+        Adds an idempotent one-shot weekly-limit reset guard with a headless
+        watcher that can protect active tasks without restarting an older GUI
+        session, plus low-memory isolated routed-host builds.</p>
+      </description>
+    </release>
+    <release version="0.5.8" date="2026-07-20">
+      <description>
+        <p>Adds per-task Auto and Manual routing controls with Balanced and
+        Max Savings profiles, a reversible manual Sol Max lock, prompt and runtime
+        escalation, shared Desktop/iOS settings, and visible per-turn route
+        receipts. Automatic routes use Standard speed and can never select
+        Ultra; Ultra remains an explicit manual choice.</p>
+      </description>
+    </release>
+    <release version="0.5.7" date="2026-07-20">
+      <description>
+        <p>Adds the Lean Context Engine for long tasks: guarded same-thread
+        automatic, prompted, or observe-only rollover; private structured
+        checkpoints; configurable hard evidence and output budgets; hash-aware
+        evidence reuse; deterministic exact-rehydration rules; and measured
+        checkpoint, compaction, and token-reduction telemetry. Desktop and iOS
+        keep one thread identity and raw app-server history remains available.</p>
+        <p>Large safe source, text, and log files can use the installed Qwen
+        Buddy read-only condenser with a bounded target and cited evidence.
+        Codex remains the sole writer and final verifier. Checkpoint hashing is
+        off the GTK thread, private files use restrictive permissions, and
+        compaction is blocked during turns, approvals, disconnection, or
+        duplicate work.</p>
+      </description>
+    </release>
+    <release version="0.5.6" date="2026-07-20">
+      <description>
+        <p>Makes Desktop/iOS continuity self-healing. The shared managed socket
+        now uses a ten-second WebSocket heartbeat, declares silent connections
+        stale after thirty seconds, times out orphaned status requests, and
+        reconnects with bounded backoff instead of leaving either UI stuck.
+        Native watches daemon RAM, swap, and event-database pressure; after two
+        unhealthy checks it safely restarts the remote host when every task is
+        idle, with a five-minute recovery cooldown.</p>
+        <p>Makes task navigation and streaming substantially lighter. Compact
+        history starts in parallel with resume, each task resumes only once per
+        transport connection, late responses cannot replace the currently open
+        task, and stale inactive history is discarded. GTK drains backend events
+        in bounded batches and coalesces task-list rebuilds, preventing a burst
+        of live tool events from monopolizing the main loop. Remote Access also
+        reports host memory pressure and warns when the older Electron client is
+        concurrently creating duplicate app-server state.</p>
+      </description>
+    </release>
+    <release version="0.5.5" date="2026-07-19">
+      <description>
+        <p>Makes upstream feature-parity checks automatic: one confirmation
+        discovers the current macOS app from OpenAI's official download page,
+        pins the artifact origin, records transport identity, computes SHA-256,
+        and reuses an unchanged inventory in under a second. The CI inventory
+        now runs daily without copied URLs, checksums, or version fields.</p>
+        <p>Improves responsiveness and memory use by lazily loading extensions,
+        apps, Qwen, and diagnostics; using state-database reads for recurring
+        history reconciliation; bounding retained transcript data; and replacing
+        continuous GTK frame-clock spinners with one low-frequency activity
+        clock shared by all running-task indicators. Extensions opens with the
+        compact installed/local catalog and loads the large remote catalog only
+        when requested. Apps render in searchable 24-card pages. Task history
+        loads compact conversation summaries before hydrating detailed activity
+        one turn at a time, and exceptionally large frames are drained without
+        reconnecting the shared Desktop/iOS Remote transport.</p>
+      </description>
+    </release>
+    <release version="0.5.4" date="2026-07-19">
+      <description>
+        <p>Keeps Native, the managed Codex daemon, and paired iOS clients on one
+        stable app-server connection. Remote status and paired-device refreshes
+        now share Native's persistent WebSocket, duplicate health checks are
+        coalesced, relay status changes refresh immediately, and every managed
+        client closes with a WebSocket close frame. This removes the recurring
+        connection churn that left stale subscribers in the daemon and delayed
+        cross-device task updates. Full task-list reconciliation now runs every
+        two minutes instead of every remote-health tick, while server events and
+        network-return refreshes keep cross-device changes immediate.</p>
+      </description>
+    </release>
+    <release version="0.5.3" date="2026-07-18">
+      <description>
+        <p>Adds native Projects, Pull requests, Sites, and Scheduled sidebar
+        surfaces. Pull requests uses the authenticated GitHub CLI read-only,
+        Sites prepares an unsent website task and opens its existing plugin,
+        and Scheduled exposes the systemd-backed automation workflow under the
+        current Codex product label. WebKit internal documents such as
+        about:srcdoc remain inside ChatGPT instead of opening a desktop
+        application chooser. Remote Access now reads status and paired devices
+        from the managed remote-control daemon, and the task speed picker maps
+        the server's internal default tier back to Standard. While Remote Access
+        is enabled, Native now uses that same managed app-server transport as
+        paired iOS clients, receives their live thread events, and resumes the
+        open task after reconnecting instead of creating a separate session.
+        Managed WebSocket reads now remain intact while UI requests are sent,
+        preventing escalating reconnect loops; recovery resumes the open task
+        first and performs only a lightweight state refresh.</p>
+      </description>
+    </release>
+    <release version="0.5.2" date="2026-07-18">
+      <description>
+        <p>Adds pasted image and file attachments, Enter-to-send, stable
+        incremental transcript rows, sparse completion merging, and task-scoped
+        model, reasoning, speed, sandbox, and approval controls. Periodic
+        history refreshes now preserve the open task, and repeated send and
+        navigation cycles maintain a bounded memory plateau. Large remote
+        plugin catalogs load lazily and render with a fixed native-card cap.</p>
+      </description>
+    </release>
+    <release version="0.5.1" date="2026-07-18">
+      <description>
+        <p>Resumes persisted tasks before starting a turn, preserves the active
+        task across paginated history refreshes, anchors the transcript scroll
+        position, and coalesces live transcript rendering for a more responsive
+        interface. Image activity now includes clickable previews and file
+        changes include direct editor actions.</p>
+      </description>
+    </release>
+    <release version="0.5.0" date="2026-07-18">
+      <description>
+        <p>Adds a guarded native Update Center for checksum-verified macOS
+        release inventories and feature-parity work. GPT-5.6 Luna with Max
+        reasoning produces a validated, selectable report; approved low- and
+        medium-risk features are implemented only in an isolated Git worktree.
+        Fixed compiler, lint, test, release-build, and Arch-package gates block
+        installation on failure. Verified local packages require explicit
+        Polkit approval and are retained for rollback.</p>
+      </description>
+    </release>
+    <release version="0.4.1" date="2026-07-18">
+      <description>
+        <p>Restores task history, the live account model catalog, weekly usage,
+        and reset-credit data while Remote Control is enabled by separating the
+        native UI's shared app-server transport from the managed remote host.
+        Adds a native StatusNotifier tray with close/minimize-to-tray, Show, and
+        explicit Quit actions; Light through Ultra reasoning plus Standard/Fast
+        speed controls; in-app ChatGPT Pro and Voice; resumable goals with stop
+        reasons; far-right running-task activity rings that track turns across
+        local Codex clients; spawned-agent counts and statuses; and a strong
+        highlight for the open task. Adds a resizable, collapsible, independently
+        scrollable Chat-to-Settings workspace menu. Redesigns the native transcript with a
+        readable content width, live step and diff progress with a full-plan hover tooltip, clickable image
+        activities with a native gallery, compact collapsible activity rows,
+        dark-theme code and diff views, and a calmer composer.</p>
+      </description>
+    </release>
+    <release version="0.4.0" date="2026-07-17">
+      <description>
+        <p>Adds native Qwen Buddy plugin health, qualified-model and GPU-pressure
+        telemetry, conservative local token and context-savings reporting,
+        opt-in Luna, file-condenser, and bounded Sol routing with an automatic
+        game-engine GPU guard, and a dedicated read-only OpenCode VTE
+        terminal.</p>
+      </description>
+    </release>
+    <release version="0.3.0" date="2026-07-17">
+      <description>
+        <p>Adds bounded transcript memory, live weekly usage and reset credits,
+        Git and worktree workflows, isolated Agent Workspaces, AppShots, Record
+        and Replay, voice, automation history, native diagnostics and Arch
+        updates, remote recovery, and a verified macOS parity-inventory
+        pipeline.</p>
+      </description>
+    </release>
+    <release version="0.2.0" date="2026-07-17">
+      <description>
+        <p>Adds plugin lifecycle management, MCP authentication and forms, and
+        Linux Computer Use readiness, policy, and setup controls.</p>
+      </description>
+    </release>
+    <release version="0.1.0" date="2026-07-17"/>
+  </releases>
+  <content_rating type="oars-1.1"/>
+</component>

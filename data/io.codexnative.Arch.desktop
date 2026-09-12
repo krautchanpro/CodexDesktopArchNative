@@ -1,0 +1,11 @@
+[Desktop Entry]
+Name=Codex Native
+Comment=Code with Codex from a native Arch Linux desktop app
+Exec=codex-native-launch
+Icon=io.codexnative.Arch
+Terminal=false
+Type=Application
+Categories=Development;IDE;
+Keywords=Codex;OpenAI;AI;Programming;Development;
+StartupNotify=true
+StartupWMClass=io.codexnative.Arch

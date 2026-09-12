@@ -1,0 +1,14 @@
+[Unit]
+Description=Codex Native desktop client
+Documentation=https://github.com/krautchanpro/CodexDesktopArchNative
+After=graphical-session.target
+PartOf=graphical-session.target
+
+[Service]
+Type=dbus
+BusName=io.codexnative.Arch
+ExecStart=/usr/bin/codex-native
+Slice=app.slice
+Restart=no
+TimeoutStartSec=20
+TimeoutStopSec=10
